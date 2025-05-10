@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VideoCall Pro - Video Calling with Screen Sharing</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Custom styles */
+        .video-container {
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .video-container.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1000;
+            background-color: black;
+        }
+        
+        .participant-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+        
+        .participant-video {
+            aspect-ratio: 16/9;
+        }
+        
+        /* Hide scrollbar but keep functionality */
+        ::-webkit-scrollbar {
+            width: 0;
+            background: transparent;
+        }
+        
+        /* Glow effect for buttons */
+        .glow-button {
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+            transition: box-shadow 0.3s ease;
+        }
+        
+        .glow-button:hover {
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.8);
+        }
+        
+        /* Pulse animation for call button */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+    <!-- Main Container -->
+    <div class="min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="bg-gray-800 py-4 px-6 shadow-lg">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center space-x-2">
+                    <i class="fas fa-video text-blue-400 text-2xl"></i>
+                    <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">VideoCall Pro</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="inviteBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg glow-button flex items-center space-x-2">
+                        <i class="fas fa-user-plus"></i>
+                        <span>Invite</span>
+                    </button>
+                    <div id="roomIdDisplay" class="bg-gray-700 px-3 py-2 rounded-lg">
+                        <span class="text-gray-300">Room ID: </span>
+                        <span id="roomId" class="font-mono font-bold">Loading...</span>
+                        <button id="copyRoomId" class="ml-2 text-blue-400 hover:text-blue-300">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col md:flex-row p-4 gap-4">
+            <!-- Video Area -->
+            <div class="flex-1 flex flex-col">
+                <!-- Main Video (Screen Share or Primary Video) -->
+                <div id="mainVideoContainer" class="video-container bg-black rounded-xl overflow-hidden relative">
+                    <video id="mainVideo" autoplay playsinline class="w-full h-full object-contain bg-black"></video>
+                    <div id="screenOwnerLabel" class="absolute bottom-4 left-4 bg-black bg-opacity-70 px-3 py-1 rounded-lg hidden">
+                        <span id="screenOwner" class="text-white">Screen Sharing</span>
+                    </div>
+                    <div class="absolute top-4 right-4 flex space-x-2">
+                        <button id="fullscreenBtn" class="bg-gray-800 hover:bg-gray-700 text-white p-2 rounded-full">
+                            <i class="fas fa-expand"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Controls -->
+                <div class="bg-gray-800 rounded-xl p-4 mt-4 flex flex-wrap justify-center gap-4">
+                    <button id="startScreenShare" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg glow-button flex items-center space-x-2">
+                        <i class="fas fa-desktop"></i>
+                        <span>Share Screen</span>
+                    </button>
+                    <button id="stopScreenShare" class="hidden bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+                        <i class="fas fa-stop"></i>
+                        <span>Stop Sharing</span>
+                    </button>
+                    <button id="toggleCamera" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+                        <i class="fas fa-video"></i>
+                        <span>Camera On</span>
+                    </button>
+                    <button id="toggleMic" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+                        <i class="fas fa-microphone"></i>
+                        <span>Mic On</span>
+                    </button>
+                    <button id="endCall" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+                        <i class="fas fa-phone-slash"></i>
+                        <span>End Call</span>
+                    </button>
+                </div>
+                
+                <!-- Participants Grid -->
+                <div class="mt-4">
+                    <h2 class="text-xl font-semibold mb-2 flex items-center">
+                        <i class="fas fa-users mr-2 text-blue-400"></i>
+                        Participants
+                    </h2>
+                    <div id="participantsGrid" class="participant-grid">
+                        <!-- Participant videos will be added here dynamically -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Chat Sidebar -->
+            <div class="w-full md:w-80 bg-gray-800 rounded-xl flex flex-col">
+                <div class="p-4 border-b border-gray-700">
+                    <h2 class="text-xl font-semibold flex items-center">
+                        <i class="fas fa-comments mr-2 text-blue-400"></i>
+                        Chat
+                    </h2>
+                </div>
+                <div id="chatMessages" class="flex-1 p-4 overflow-y-auto max-h-96">
+                    <!-- Messages will appear here -->
+                    <div class="text-center text-gray-400 py-4">
+                        <i class="fas fa-comment-slash text-2xl mb-2"></i>
+                        <p>No messages yet. Say hello!</p>
+                    </div>
+                </div>
+                <div class="p-4 border-t border-gray-700">
+                    <div class="flex space-x-2">
+                        <input id="chatInput" type="text" placeholder="Type a message..." class="flex-1 bg-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <button id="sendMessageBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Invite Modal -->
+    <div id="inviteModal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
+        <div class="bg-gray-800 rounded-xl p-6 w-full max-w-md">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-semibold">Invite Participants</h3>
+                <button id="closeInviteModal" class="text-gray-400 hover:text-white">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="mb-4">
+                <p class="text-gray-300 mb-2">Share this link to invite others:</p>
+                <div class="flex">
+                    <input id="inviteLink" type="text" readonly class="flex-1 bg-gray-700 text-white px-4 py-2 rounded-l-lg focus:outline-none">
+                    <button id="copyInviteLink" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-r-lg">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="flex justify-end">
+                <button id="closeInviteModalBtn" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Join Call Modal -->
+    <div id="joinModal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-xl p-6 w-full max-w-md">
+            <div class="flex justify-center mb-6">
+                <div class="bg-blue-600 rounded-full p-4">
+                    <i class="fas fa-video text-white text-3xl"></i>
+                </div>
+            </div>
+            <h2 class="text-2xl font-bold text-center mb-2">Join Video Call</h2>
+            <p class="text-gray-400 text-center mb-6">Enter your name to join the call</p>
+            
+            <div class="mb-4">
+                <label for="userName" class="block text-gray-300 mb-2">Your Name</label>
+                <input type="text" id="userName" placeholder="Enter your name" class="w-full bg-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            
+            <button id="joinCallBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg glow-button pulse-animation flex items-center justify-center space-x-2">
+                <i class="fas fa-phone-alt"></i>
+                <span>Join Call</span>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const mainVideo = document.getElementById('mainVideo');
+        const mainVideoContainer = document.getElementById('mainVideoContainer');
+        const participantsGrid = document.getElementById('participantsGrid');
+        const chatMessages = document.getElementById('chatMessages');
+        const chatInput = document.getElementById('chatInput');
+        const sendMessageBtn = document.getElementById('sendMessageBtn');
+        const inviteBtn = document.getElementById('inviteBtn');
+        const inviteModal = document.getElementById('inviteModal');
+        const closeInviteModal = document.getElementById('closeInviteModal');
+        const closeInviteModalBtn = document.getElementById('closeInviteModalBtn');
+        const inviteLink = document.getElementById('inviteLink');
+        const copyInviteLink = document.getElementById('copyInviteLink');
+        const roomIdDisplay = document.getElementById('roomIdDisplay');
+        const roomId = document.getElementById('roomId');
+        const copyRoomId = document.getElementById('copyRoomId');
+        const startScreenShare = document.getElementById('startScreenShare');
+        const stopScreenShare = document.getElementById('stopScreenShare');
+        const toggleCamera = document.getElementById('toggleCamera');
+        const toggleMic = document.getElementById('toggleMic');
+        const endCall = document.getElementById('endCall');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const screenOwnerLabel = document.getElementById('screenOwnerLabel');
+        const screenOwner = document.getElementById('screenOwner');
+        const joinModal = document.getElementById('joinModal');
+        const joinCallBtn = document.getElementById('joinCallBtn');
+        const userName = document.getElementById('userName');
+
+        // State variables
+        let localStream = null;
+        let screenStream = null;
+        let isCameraOn = true;
+        let isMicOn = true;
+        let participants = {};
+        let currentScreenSharer = null;
+        let userNameValue = "User";
+        let isInCall = false;
+        
+        // Generate a random room ID
+        function generateRoomId() {
+            return Math.random().toString(36).substring(2, 8).toUpperCase();
+        }
+        
+        // Initialize room
+        function initRoom() {
+            const room = generateRoomId();
+            roomId.textContent = room;
+            
+            // Generate invite link
+            const url = new URL(window.location.href);
+            url.searchParams.set('room', room);
+            inviteLink.value = url.toString();
+            
+            // Check for room in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomParam = urlParams.get('room');
+            
+            if (roomParam) {
+                roomId.textContent = roomParam;
+                addMessage('System', `You joined room ${roomParam}`, 'system');
+            } else {
+                addMessage('System', `Room created with ID: ${room}`, 'system');
+            }
+        }
+        
+        // Add a message to the chat
+        function addMessage(sender, message, type = 'user') {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `mb-3 ${type === 'system' ? 'text-center text-gray-400 text-sm' : ''}`;
+            
+            if (type === 'user') {
+                messageDiv.innerHTML = `
+                    <div class="flex items-start">
+                        <div class="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center mr-2">
+                            ${sender.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                            <div class="font-semibold text-blue-400">${sender}</div>
+                            <div class="bg-gray-700 rounded-lg p-2 mt-1 inline-block">${message}</div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                messageDiv.textContent = message;
+            }
+            
+            // Remove the "no messages" placeholder if it exists
+            if (chatMessages.querySelector('.text-center')) {
+                chatMessages.innerHTML = '';
+            }
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        // Add a participant video
+        function addParticipant(id, name, stream, isLocal = false) {
+            if (participants[id]) return;
+            
+            const participantDiv = document.createElement('div');
+            participantDiv.className = 'bg-gray-800 rounded-xl overflow-hidden relative participant-video';
+            participantDiv.id = `participant-${id}`;
+            
+            const video = document.createElement('video');
+            video.autoplay = true;
+            video.playsInline = true;
+            video.className = 'w-full h-full object-cover bg-gray-900';
+            video.srcObject = stream;
+            
+            const nameDiv = document.createElement('div');
+            nameDiv.className = 'absolute bottom-2 left-2 bg-black bg-opacity-70 px-2 py-1 rounded-lg text-sm';
+            nameDiv.textContent = name + (isLocal ? ' (You)' : '');
+            
+            participantDiv.appendChild(video);
+            participantDiv.appendChild(nameDiv);
+            participantsGrid.appendChild(participantDiv);
+            
+            participants[id] = {
+                name,
+                stream,
+                element: participantDiv,
+                videoElement: video
+            };
+            
+            if (!isLocal) {
+                addMessage('System', `${name} joined the call`, 'system');
+            }
+            
+            // If this is the first remote participant, show their video in the main view
+            if (!isLocal && Object.keys(participants).length === 2) { // 2 because local is always there
+                showParticipantInMainView(id);
+            }
+        }
+        
+        // Show a participant's video in the main view
+        function showParticipantInMainView(id) {
+            if (!participants[id]) return;
+            
+            const participant = participants[id];
+            mainVideo.srcObject = participant.stream;
+            
+            // If this participant is screen sharing, show that info
+            if (id === currentScreenSharer) {
+                screenOwnerLabel.classList.remove('hidden');
+                screenOwner.textContent = `${participant.name}'s screen`;
+            } else {
+                screenOwnerLabel.classList.add('hidden');
+            }
+        }
+        
+        // Remove a participant
+        function removeParticipant(id) {
+            if (!participants[id]) return;
+            
+            const participant = participants[id];
+            addMessage('System', `${participant.name} left the call`, 'system');
+            
+            participant.element.remove();
+            delete participants[id];
+            
+            // If this participant was screen sharing, clear the screen share
+            if (currentScreenSharer === id) {
+                stopScreenSharing();
+            }
+            
+            // If we were showing this participant in the main view, switch to another participant
+            if (mainVideo.srcObject === participant.stream) {
+                const remainingParticipants = Object.keys(participants).filter(p => p !== 'local');
+                if (remainingParticipants.length > 0) {
+                    showParticipantInMainView(remainingParticipants[0]);
+                } else {
+                    // No more participants, show local video
+                    showParticipantInMainView('local');
+                }
+            }
+        }
+        
+        // Start screen sharing
+        async function startScreenSharing() {
+            try {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                    throw new Error('Screen sharing not supported');
+                }
+                
+                screenStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: true,
+                    audio: true
+                });
+                
+                // Handle when user stops sharing via browser UI
+                screenStream.getVideoTracks()[0].onended = () => {
+                    stopScreenSharing();
+                };
+                
+                mainVideo.srcObject = screenStream;
+                currentScreenSharer = 'local';
+                screenOwnerLabel.classList.remove('hidden');
+                screenOwner.textContent = 'Your screen';
+                
+                startScreenShare.classList.add('hidden');
+                stopScreenShare.classList.remove('hidden');
+                
+                addMessage('System', 'You started screen sharing', 'system');
+            } catch (err) {
+                console.error('Error sharing screen:', err);
+                addMessage('System', 'Failed to start screen sharing: ' + err.message, 'system');
+            }
+        }
+        
+        // Stop screen sharing
+        function stopScreenSharing() {
+            if (screenStream) {
+                screenStream.getTracks().forEach(track => track.stop());
+                screenStream = null;
+            }
+            
+            currentScreenSharer = null;
+            screenOwnerLabel.classList.add('hidden');
+            
+            startScreenShare.classList.remove('hidden');
+            stopScreenShare.classList.add('hidden');
+            
+            addMessage('System', 'You stopped screen sharing', 'system');
+            
+            // Switch back to showing a participant's video
+            const remoteParticipants = Object.keys(participants).filter(p => p !== 'local');
+            if (remoteParticipants.length > 0) {
+                showParticipantInMainView(remoteParticipants[0]);
+            } else {
+                // No remote participants, show local video
+                mainVideo.srcObject = localStream;
+            }
+        }
+        
+        // Toggle camera
+        async function toggleCameraState() {
+            if (!localStream) return;
+            
+            const videoTracks = localStream.getVideoTracks();
+            if (videoTracks.length === 0) {
+                // No video track exists, try to get one
+                try {
+                    const newStream = await navigator.mediaDevices.getUserMedia({
+                        video: true,
+                        audio: isMicOn
+                    });
+                    
+                    // Replace the existing stream
+                    localStream.getTracks().forEach(track => track.stop());
+                    localStream = newStream;
+                    
+                    // Update the participant video
+                    participants['local'].videoElement.srcObject = localStream;
+                    if (mainVideo.srcObject === participants['local'].stream) {
+                        mainVideo.srcObject = localStream;
+                    }
+                    
+                    isCameraOn = true;
+                    updateCameraButton();
+                    addMessage('System', 'Camera turned on', 'system');
+                } catch (err) {
+                    console.error('Error accessing camera:', err);
+                    addMessage('System', 'Failed to access camera', 'system');
+                }
+                return;
+            }
+            
+            isCameraOn = !isCameraOn;
+            videoTracks.forEach(track => {
+                track.enabled = isCameraOn;
+            });
+            
+            updateCameraButton();
+            addMessage('System', `Camera turned ${isCameraOn ? 'on' : 'off'}`, 'system');
+        }
+        
+        function updateCameraButton() {
+            toggleCamera.innerHTML = `
+                <i class="fas fa-video${isCameraOn ? '' : '-slash'}"></i>
+                <span>Camera ${isCameraOn ? 'On' : 'Off'}</span>
+            `;
+            
+            if (isCameraOn) {
+                toggleCamera.classList.remove('bg-red-600');
+                toggleCamera.classList.add('bg-gray-600');
+            } else {
+                toggleCamera.classList.remove('bg-gray-600');
+                toggleCamera.classList.add('bg-red-600');
+            }
+        }
+        
+        // Toggle microphone
+        function toggleMicState() {
+            if (!localStream) return;
+            
+            const audioTracks = localStream.getAudioTracks();
+            if (audioTracks.length === 0) {
+                addMessage('System', 'No microphone available', 'system');
+                return;
+            }
+            
+            isMicOn = !isMicOn;
+            audioTracks.forEach(track => {
+                track.enabled = isMicOn;
+            });
+            
+            updateMicButton();
+            addMessage('System', `Microphone turned ${isMicOn ? 'on' : 'off'}`, 'system');
+        }
+        
+        function updateMicButton() {
+            toggleMic.innerHTML = `
+                <i class="fas fa-microphone${isMicOn ? '' : '-slash'}"></i>
+                <span>Mic ${isMicOn ? 'On' : 'Off'}</span>
+            `;
+            
+            if (isMicOn) {
+                toggleMic.classList.remove('bg-red-600');
+                toggleMic.classList.add('bg-gray-600');
+            } else {
+                toggleMic.classList.remove('bg-gray-600');
+                toggleMic.classList.add('bg-red-600');
+            }
+        }
+        
+        // Initialize local camera and microphone
+        async function initLocalStream() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: true
+                });
+                
+                // Add yourself as a participant
+                addParticipant('local', userNameValue, localStream, true);
+                
+                // Show local video in main view initially
+                mainVideo.srcObject = localStream;
+                
+                // Update button states
+                updateCameraButton();
+                updateMicButton();
+                
+            } catch (err) {
+                console.error('Error accessing media devices:', err);
+                
+                // Try to get just audio if video fails
+                try {
+                    localStream = await navigator.mediaDevices.getUserMedia({
+                        audio: true
+                    });
+                    
+                    // Add yourself as a participant
+                    addParticipant('local', userNameValue, localStream, true);
+                    
+                    // Show local audio in main view initially
+                    mainVideo.srcObject = localStream;
+                    
+                    isCameraOn = false;
+                    updateCameraButton();
+                    updateMicButton();
+                    
+                    addMessage('System', 'Camera access denied, using audio only', 'system');
+                } catch (audioErr) {
+                    console.error('Error accessing audio:', audioErr);
+                    addMessage('System', 'Failed to access camera and microphone', 'system');
+                }
+            }
+        }
+        
+        // Join the call
+        async function joinCall() {
+            userNameValue = userName.value.trim() || "User";
+            joinModal.classList.add('hidden');
+            isInCall = true;
+            
+            await initLocalStream();
+            
+            // Simulate other participants joining
+            setTimeout(() => {
+                // Create a dummy stream for demo participants
+                const createDummyStream = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 640;
+                    canvas.height = 480;
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#333';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.fillStyle = '#666';
+                    ctx.font = '30px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('Participant Video', canvas.width/2, canvas.height/2);
+                    
+                    const stream = canvas.captureStream(0);
+                    return stream;
+                };
+                
+                addParticipant('user1', 'Alex', createDummyStream());
+                setTimeout(() => {
+                    addParticipant('user2', 'Jamie', createDummyStream());
+                }, 1500);
+            }, 1000);
+            
+            addMessage('System', `Welcome ${userNameValue}! You've joined the call.`, 'system');
+        }
+        
+        // End the call
+        function endCurrentCall() {
+            if (confirm('Are you sure you want to end the call?')) {
+                // Stop all streams
+                if (localStream) {
+                    localStream.getTracks().forEach(track => track.stop());
+                }
+                
+                if (screenStream) {
+                    screenStream.getTracks().forEach(track => track.stop());
+                }
+                
+                // Reset UI
+                participantsGrid.innerHTML = '';
+                participants = {};
+                mainVideo.srcObject = null;
+                isInCall = false;
+                localStream = null;
+                screenStream = null;
+                
+                // Reset button states
+                isCameraOn = true;
+                isMicOn = true;
+                updateCameraButton();
+                updateMicButton();
+                startScreenShare.classList.remove('hidden');
+                stopScreenShare.classList.add('hidden');
+                
+                // Show join modal again
+                joinModal.classList.remove('hidden');
+                
+                addMessage('System', 'You left the call', 'system');
+            }
+        }
+        
+        // Event Listeners
+        sendMessageBtn.addEventListener('click', () => {
+            const message = chatInput.value.trim();
+            if (message) {
+                addMessage(userNameValue, message);
+                chatInput.value = '';
+                
+                // Simulate responses
+                if (message.toLowerCase().includes('hello') || message.toLowerCase().includes('hi')) {
+                    setTimeout(() => {
+                        addMessage('Alex', 'Hi there! How are you?');
+                    }, 1000);
+                }
+            }
+        });
+        
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessageBtn.click();
+            }
+        });
+        
+        inviteBtn.addEventListener('click', () => {
+            inviteModal.classList.remove('hidden');
+        });
+        
+        closeInviteModal.addEventListener('click', () => {
+            inviteModal.classList.add('hidden');
+        });
+        
+        closeInviteModalBtn.addEventListener('click', () => {
+            inviteModal.classList.add('hidden');
+        });
+        
+        copyInviteLink.addEventListener('click', () => {
+            inviteLink.select();
+            document.execCommand('copy');
+            
+            // Show copied feedback
+            const originalText = copyInviteLink.innerHTML;
+            copyInviteLink.innerHTML = '<i class="fas fa-check"></i> Copied!';
+            setTimeout(() => {
+                copyInviteLink.innerHTML = originalText;
+            }, 2000);
+        });
+        
+        copyRoomId.addEventListener('click', () => {
+            const range = document.createRange();
+            range.selectNode(roomId);
+            window.getSelection().removeAllRanges();
+            window.getSelection().addRange(range);
+            document.execCommand('copy');
+            window.getSelection().removeAllRanges();
+            
+            // Show copied feedback
+            const originalText = copyRoomId.innerHTML;
+            copyRoomId.innerHTML = '<i class="fas fa-check"></i>';
+            setTimeout(() => {
+                copyRoomId.innerHTML = originalText;
+            }, 2000);
+        });
+        
+        startScreenShare.addEventListener('click', startScreenSharing);
+        stopScreenShare.addEventListener('click', stopScreenSharing);
+        toggleCamera.addEventListener('click', toggleCameraState);
+        toggleMic.addEventListener('click', toggleMicState);
+        endCall.addEventListener('click', endCurrentCall);
+        
+        fullscreenBtn.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                mainVideoContainer.requestFullscreen().catch(err => {
+                    console.error('Error attempting to enable fullscreen:', err);
+                });
+                fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i>';
+            } else {
+                document.exitFullscreen();
+                fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
+            }
+        });
+        
+        // Handle fullscreen change events
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) {
+                fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
+            }
+        });
+        
+        joinCallBtn.addEventListener('click', joinCall);
+        userName.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                joinCall();
+            }
+        });
+        
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', () => {
+            initRoom();
+            
+            // Add welcome message
+            setTimeout(() => {
+                if (!isInCall) {
+                    addMessage('System', 'Enter your name and click "Join Call" to start', 'system');
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
