@@ -185,6 +185,15 @@
                     </button>
                 </div>
             </div>
+            <div class="mb-4">
+                <p class="text-gray-300 mb-2">Or share this room ID:</p>
+                <div class="flex">
+                    <input id="roomIdInput" type="text" readonly class="flex-1 bg-gray-700 text-white px-4 py-2 rounded-l-lg focus:outline-none">
+                    <button id="copyRoomIdModal" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-r-lg">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+            </div>
             <div class="flex justify-end">
                 <button id="closeInviteModalBtn" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">
                     Close
@@ -233,6 +242,8 @@
         const roomIdDisplay = document.getElementById('roomIdDisplay');
         const roomId = document.getElementById('roomId');
         const copyRoomId = document.getElementById('copyRoomId');
+        const roomIdInput = document.getElementById('roomIdInput');
+        const copyRoomIdModal = document.getElementById('copyRoomIdModal');
         const startScreenShare = document.getElementById('startScreenShare');
         const stopScreenShare = document.getElementById('stopScreenShare');
         const toggleCamera = document.getElementById('toggleCamera');
@@ -254,6 +265,7 @@
         let currentScreenSharer = null;
         let userNameValue = "User";
         let isInCall = false;
+        let currentRoomId = "";
         
         // Generate a random room ID
         function generateRoomId() {
@@ -262,24 +274,25 @@
         
         // Initialize room
         function initRoom() {
-            const room = generateRoomId();
-            roomId.textContent = room;
-            
-            // Generate invite link
-            const url = new URL(window.location.href);
-            url.searchParams.set('room', room);
-            inviteLink.value = url.toString();
-            
-            // Check for room in URL
             const urlParams = new URLSearchParams(window.location.search);
             const roomParam = urlParams.get('room');
             
             if (roomParam) {
+                currentRoomId = roomParam;
                 roomId.textContent = roomParam;
+                roomIdInput.value = roomParam;
                 addMessage('System', `You joined room ${roomParam}`, 'system');
             } else {
-                addMessage('System', `Room created with ID: ${room}`, 'system');
+                currentRoomId = generateRoomId();
+                roomId.textContent = currentRoomId;
+                roomIdInput.value = currentRoomId;
+                addMessage('System', `Room created with ID: ${currentRoomId}`, 'system');
             }
+            
+            // Generate invite link
+            const url = new URL(window.location.href);
+            url.searchParams.set('room', currentRoomId);
+            inviteLink.value = url.toString();
         }
         
         // Add a message to the chat
@@ -658,6 +671,19 @@
             }
         }
         
+        // Copy text to clipboard
+        function copyToClipboard(text, button) {
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = button.innerHTML;
+                button.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+            });
+        }
+        
         // Event Listeners
         sendMessageBtn.addEventListener('click', () => {
             const message = chatInput.value.trim();
@@ -693,31 +719,15 @@
         });
         
         copyInviteLink.addEventListener('click', () => {
-            inviteLink.select();
-            document.execCommand('copy');
-            
-            // Show copied feedback
-            const originalText = copyInviteLink.innerHTML;
-            copyInviteLink.innerHTML = '<i class="fas fa-check"></i> Copied!';
-            setTimeout(() => {
-                copyInviteLink.innerHTML = originalText;
-            }, 2000);
+            copyToClipboard(inviteLink.value, copyInviteLink);
         });
         
         copyRoomId.addEventListener('click', () => {
-            const range = document.createRange();
-            range.selectNode(roomId);
-            window.getSelection().removeAllRanges();
-            window.getSelection().addRange(range);
-            document.execCommand('copy');
-            window.getSelection().removeAllRanges();
-            
-            // Show copied feedback
-            const originalText = copyRoomId.innerHTML;
-            copyRoomId.innerHTML = '<i class="fas fa-check"></i>';
-            setTimeout(() => {
-                copyRoomId.innerHTML = originalText;
-            }, 2000);
+            copyToClipboard(currentRoomId, copyRoomId);
+        });
+        
+        copyRoomIdModal.addEventListener('click', () => {
+            copyToClipboard(currentRoomId, copyRoomIdModal);
         });
         
         startScreenShare.addEventListener('click', startScreenSharing);
